@@ -8,8 +8,8 @@ jobs:
   chart:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: azure/setup-helm@v4
+      - uses: actions/checkout@v7
+      - uses: azure/setup-helm@v5
       - name: helm lint
         run: helm lint chart -f chart/ci/test-values.yaml
       - name: helm template (defaults, ingress, auth variants)
@@ -29,12 +29,29 @@ jobs:
 
   anchors:
     # Dry-runs every hotfix against the pinned image. Slow (arm64 under QEMU,
-    # ~10 GB pull) but it is the only check that catches a moved anchor.
+    # ~9 GiB image) but it is the only check that catches a moved anchor.
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: azure/setup-helm@v4
-      - uses: docker/setup-qemu-action@v3
+      - name: Free disk space for the image
+        # The image is ~9 GiB compressed and needs roughly twice that to pull
+        # and extract, but ubuntu-latest only has ~14 GiB free. Without this the
+        # pull dies mid-extract with
+        #   "failed to register layer: ... no space left on device" (exit 125).
+        # Remove toolchains this job does not use; nothing here needs dotnet,
+        # Android, GHC, CodeQL or Swift, and the runner tool cache is left
+        # intact so the setup-* actions keep working.
+        run: |
+          echo "before:"; df -h / | tail -1
+          sudo rm -rf /usr/local/lib/android /usr/share/dotnet /opt/ghc \
+                      /opt/hostedtoolcache/CodeQL /usr/local/share/boost \
+                      /usr/share/swift /usr/local/.ghcup \
+                      /opt/microsoft/powershell 2>/dev/null || true
+          sudo apt-get clean
+          docker image prune -af 2>/dev/null || true
+          echo "after:"; df -h / | tail -1
+      - uses: actions/checkout@v7
+      - uses: azure/setup-helm@v5
+      - uses: docker/setup-qemu-action@v4
         with:
           platforms: arm64
       - name: anchor check against the chart's image

@@ -12,6 +12,8 @@
 # filesystem is thrown away, so nothing persists. No GPU needed.
 #
 # Env: DOCKER_PLATFORM (default linux/arm64; the image is arm64-only)
+#      DOCKER_ROOT      (default /var/lib/docker) where free space is measured
+#      MIN_FREE_GIB     (default 20) required free space under DOCKER_ROOT
 set -euo pipefail
 
 CHART="$(cd "$(dirname "${BASH_SOURCE[0]}")/../chart" && pwd)"
@@ -68,9 +70,41 @@ done < <(find "${FILES}" -type f \( -name '*.py' -o -name '*.sh' \) -print0)
 
 # ── Image dry-run ──
 command -v docker >/dev/null 2>&1 || { echo "docker is required for --image" >&2; exit 2; }
+PLATFORM="${DOCKER_PLATFORM:-linux/arm64}"
+MIN_FREE_GIB="${MIN_FREE_GIB:-20}"
+
+# The image is ~9 GiB compressed and needs roughly twice that to pull and
+# extract (Docker holds the blob, then the expanded layer). Check first: a
+# mid-extract "no space left on device" is a confusing way to learn this.
+# Measure the docker root, falling back to / when it does not exist yet.
+space_path="${DOCKER_ROOT:-/var/lib/docker}"
+[[ -d "${space_path}" ]] || space_path="/"
+avail_kb="$(df -Pk "${space_path}" 2>/dev/null | awk 'NR==2 {print $4}')" || avail_kb=""
+if [[ "${avail_kb}" =~ ^[0-9]+$ ]]; then
+  avail_gib=$((avail_kb / 1048576))
+  echo "anchor check: ${avail_gib} GiB free under ${space_path} (need >= ${MIN_FREE_GIB})"
+  if ((avail_gib < MIN_FREE_GIB)); then
+    echo "ERROR: not enough disk for ${IMAGE}." >&2
+    echo "       It is ~9 GiB compressed and needs ~${MIN_FREE_GIB} GiB free to pull and extract." >&2
+    echo "       GitHub's ubuntu runners start with ~14 GiB; free space before this step." >&2
+    exit 1
+  fi
+fi
+
+echo "anchor check: pulling ${IMAGE} (${PLATFORM})"
+set +e
+docker pull --platform "${PLATFORM}" "${IMAGE}" 2>&1 | tee "${tmp}/pull.log"
+pull_rc=${PIPESTATUS[0]}
+set -e
+if [[ "${pull_rc}" -ne 0 ]]; then
+  echo "ERROR: docker pull failed (exit ${pull_rc})" >&2
+  grep -iE 'no space left|failed to register layer' "${tmp}/pull.log" >&2 || true
+  exit 1
+fi
+
 log="${tmp}/anchors.log"
 set +e
-docker run --rm --platform "${DOCKER_PLATFORM:-linux/arm64}" --entrypoint bash \
+docker run --rm --platform "${PLATFORM}" --entrypoint bash \
   -e DSPARK_CHECK_ALL=1 -e DSPARK_APPLY_ONLY=1 \
   -e DSPARK_MODEL_DIR=/nonexistent -e VLLM_NODE_RANK=0 \
   -v "${FILES}/serve.sh:/etc/vllm/serve.sh:ro" \
@@ -79,6 +113,20 @@ docker run --rm --platform "${DOCKER_PLATFORM:-linux/arm64}" --entrypoint bash \
   "${IMAGE}" /etc/vllm/serve.sh 2>&1 | tee "${log}"
 dock_rc=${PIPESTATUS[0]}
 set -e
-summarize "${log}" || rc=1
-[[ "${dock_rc}" -eq 0 ]] || { echo "container exited ${dock_rc}" >&2; rc=1; }
+
+if grep -q '^\[hotfix\]' "${log}"; then
+  summarize "${log}" || rc=1
+else
+  # Docker never got as far as starting the entrypoint (e.g. exit 125).
+  echo "anchor check: the container produced no hotfix output" >&2
+  rc=1
+fi
+if [[ "${dock_rc}" -ne 0 ]]; then
+  if [[ "${dock_rc}" -eq 125 ]]; then
+    echo "container exited 125: docker could not run the container (see above)" >&2
+  else
+    echo "container exited ${dock_rc}" >&2
+  fi
+  rc=1
+fi
 exit "${rc}"
