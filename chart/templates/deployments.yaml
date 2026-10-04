@@ -1,0 +1,36 @@
+{{- $k := int (.Values.serving.speculative.numTokens) }}
+{{- if and (ne (mod $k 3) 0) (not .Values.hotfixes.enable.dsparkBlockK) }}
+{{- fail (printf "serving.speculative.numTokens=%d is not a multiple of 3; the stock rule requires k %% 3 == 0. Enable hotfixes.enable.dsparkBlockK for k=5." $k) }}
+{{- end }}
+{{- if and .Values.auth.existingSecret (or .Values.auth.apiKey .Values.auth.apiKeys) }}
+{{- fail "set either auth.existingSecret or auth.apiKey/auth.apiKeys, not both" }}
+{{- end }}
+{{- range $c := list (dict "name" "leader" "rank" 0) (dict "name" "worker" "rank" 1) }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "dspark.fullname" $ }}-{{ $c.name }}
+  labels:
+    {{- include "dspark.labels" $ | nindent 4 }}
+    app.kubernetes.io/component: {{ $c.name }}
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      {{- include "dspark.selectorLabels" (dict "root" $ "component" $c.name) | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "dspark.labels" $ | nindent 8 }}
+        {{- include "dspark.selectorLabels" (dict "root" $ "component" $c.name) | nindent 8 }}
+      annotations:
+        checksum/scripts: {{ printf "%s%s%s" (include (print $.Template.BasePath "/configmaps.yaml") $) ($.Files.Get "files/serve.sh") (toJson $.Values.hotfixes) | sha256sum }}
+        {{- with $.Values.podAnnotations }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+    spec:
+      {{- include "dspark.podSpec" (dict "root" $ "rank" $c.rank "component" $c.name) | nindent 6 }}
+---
+{{ end }}

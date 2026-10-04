@@ -1,0 +1,14 @@
+apiVersion: v2
+name: dspark-vllm
+description: >-
+  DeepSeek-V4-Flash-Vision served tensor-parallel (TP=2, 1M context, nvfp4_ds_mla KV)
+  across two NVIDIA DGX Spark nodes on Kubernetes/k3s.
+type: application
+version: 0.1.0
+appVersion: "0.1.1"
+kubeVersion: ">=1.28.0-0"
+home: https://github.com/hcflabs/K8s-DeepSeek-v4-Flash-Vision-DSpark-2x-DGX-Spark
+sources:
+  - https://github.com/hcflabs/K8s-DeepSeek-v4-Flash-Vision-DSpark-2x-DGX-Spark
+  - https://github.com/MiaAI-Lab/DeepSeek-v4-Flash-DSpark-2x-DGX-Spark
+keywords: [vllm, deepseek, dgx-spark, gb10, rdma, k3s]

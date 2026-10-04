@@ -1,0 +1,171 @@
+# DeepSeek-V4-Flash-Vision on two DGX Sparks. Names mirror the Ansible inventory
+# vars (gpu_fabric_interface <-> topology.fabric.interface, ...). See ENVS.md.
+
+nameOverride: ""
+fullnameOverride: ""
+
+image:
+  repository: ghcr.io/anemll/dspark-vllm-gx10
+  tag: "0.1.1"
+  # Optional immutable pin; wins over tag when set (e.g. "sha256:..."). The hotfix
+  # anchors only match the build the default tag points at, so pin what you tested.
+  digest: ""
+  pullPolicy: IfNotPresent
+imagePullSecrets: []
+
+model:
+  # Any checkpoint the hotfix set supports. Default is the upstream recipe's.
+  repo: deepseek-ai/DeepSeek-V4-Flash-Vision-Exp
+  revision: ""            # informational; prepare-model.sh pins the download
+  servedName: deepseek-v4-flash-vision-exp
+  # Mount-point name under /models inside the pod (host path is weights.hostPath.*).
+  dirName: DeepSeek-V4-Flash-Vision-Exp
+
+topology:
+  # Node selection. Ansible sets these labels at k3s registration.
+  rankLabels:
+    key: node.dspark/rank
+    leader: leader
+    worker: worker
+  gpuToleration:
+    key: nvidia.com/gpu
+    operator: Exists
+    effect: NoSchedule
+  fabric:
+    # REQUIRED - hardware/network specific, no defaults.
+    masterAddr: ""     # leader's address on the point-to-point fabric
+    workerAddr: ""     # worker's address on the fabric (beacon target)
+    interface: ""      # NCCL_SOCKET_IFNAME: netdev carrying the fabric (see `ip -br link`)
+    rdmaDevice: ""     # NCCL_IB_HCA: RDMA device of that port (see /sys/class/infiniband);
+                       # a wrong value silently falls back to TCP
+    port: 25000                   # torch.distributed master port
+    beaconPort: 25099
+
+weights:
+  # Full checkpoint directory on each node (REQUIRED; worker unless nfs.enabled).
+  # Paths may differ per node.
+  hostPath:
+    leader: ""
+    worker: ""
+  # Opt-in: worker mounts the leader's copy over the fabric instead of its own hostPath.
+  nfs:
+    enabled: false
+    server: ""
+    path: ""
+
+serving:
+  tensorParallelSize: 2      # fixed by topology; informational
+  maxModelLen: 1048576
+  kvCacheDtype: nvfp4_ds_mla
+  moeBackend: flashinfer_b12x
+  blockSize: 256
+  gpuMemoryUtilization: 0.84
+  maxNumSeqs: 6
+  maxNumBatchedTokens: 8192
+  longPrefillTokenThreshold: 1024
+  maxCudagraphCaptureSize: 48
+  prefixCacheRetentionInterval: 4096
+  breakableCudagraph: false
+  asyncScheduling: true
+  flashinferAutotune: true
+  limitMmPerPrompt: '{"image":8}'
+  chatTemplateKwargs: '{"thinking":true,"reasoning_effort":"low"}'
+  speculative:
+    method: dspark
+    # Stock rule: k % 3 == 0 (checkpoint num_nextn_predict_layers=3). k=5 needs
+    # hotfixes.enable.dsparkBlockK=true.
+    numTokens: 6
+    draftSampleMethod: probabilistic
+  # Extra `vllm serve` flags, appended verbatim (whitespace-separated).
+  extraArgs: ""
+  ncclDebug: INFO
+  ompNumThreads: 20
+  extraEnv: []               # [{name: X, value: Y}]
+
+# Hotfix gates (see ENVS.md for the table). Upstream defaults except issue31,
+# which is on for the validated profile.
+hotfixes:
+  enable:
+    issue31ThinkingBudget: true
+    adaptiveChunk: false
+    replicateMarkov: false
+    spIndexer: false
+    deepgemmSm121Alias: false
+    issue141SparseMlaChunk: false
+    assistantFinal: false
+    issue144EffortAlign: false
+    issue136Xgrammar: false
+    issue191ToolcallFailclosed: false
+    dsparkBlockK: false
+    ropeSwaFix: false
+    dsparkSwaPrefix: false
+    dsmlRecovery: false
+    mxfp4IndexerCache: false
+    c128aPrefillCache: false
+    issue138ResponsesHistory: false
+    codexAgentMessage: false
+    responsesStore: false
+  skip:                       # opt-outs for hotfixes that are on by default
+    issue22: false
+    spinWait: false
+    issue117Recheck: false
+    batch: false
+    suppressStops: false
+
+# Opt-in runtime refusal-direction ablation (upstream ABLITERATED=1 lane).
+# Serves the official weights plus a gated direction file. Not the same as the
+# alternate checkpoint (set model.repo for that).
+ablation:
+  enabled: false
+  directionHostPath: ""       # file on each node, mounted read-only
+  lambda: ""                  # DSV4_ABLATE_LAMBDA (upstream default 3.5)
+  layers: ""                  # DSV4_ABLATE_LAYERS (upstream default 10-42)
+
+# /v1 is unauthenticated unless one of these is set. /health never needs a key.
+auth:
+  existingSecret: ""          # operator-managed Secret
+  existingSecretKey: token    # key holding one or more space-separated API keys
+  apiKey: ""                  # chart mints a Secret from this...
+  apiKeys: []                 # ...or from this list
+
+service:
+  type: ClusterIP
+  port: 8000
+
+# Rendered only when `hosts` is non-empty.
+ingress:
+  className: ""
+  annotations: {}
+  hosts: []                   # e.g. [vllm.example.com]
+  tls: []                     # [{secretName: x, hosts: [vllm.example.com]}]
+
+shm:
+  sizeLimit: 64Gi
+
+resources:
+  requests:
+    cpu: "2"
+    memory: 100Gi
+  limits:
+    nvidia.com/gpu: 1
+
+runtimeClassName: nvidia
+
+# Cold start (weights, profiling, KV sizing, CUDA graphs) takes tens of minutes
+# up to ~2h; liveness only arms once startup succeeds.
+probes:
+  startup:
+    initialDelaySeconds: 180
+    periodSeconds: 30
+    timeoutSeconds: 10
+    failureThreshold: 240
+  liveness:
+    periodSeconds: 30
+    timeoutSeconds: 15
+    failureThreshold: 10
+  readiness:
+    periodSeconds: 15
+    timeoutSeconds: 10
+    failureThreshold: 3
+
+podAnnotations: {}
