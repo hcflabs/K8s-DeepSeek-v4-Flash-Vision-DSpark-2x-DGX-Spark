@@ -21,8 +21,8 @@ From OCI (published on tag):
 
 ```bash
 helm upgrade --install dspark-vllm oci://ghcr.io/<owner>/charts/dspark-vllm \
-  --version 0.1.0 -n vllm --create-namespace -f my-values.yaml
-helm pull oci://ghcr.io/<owner>/charts/dspark-vllm --version 0.1.0
+  --version <version> -n vllm --create-namespace -f my-values.yaml
+helm pull oci://ghcr.io/<owner>/charts/dspark-vllm --version <version>
 ```
 
 Via k3s's built-in helm-controller (apply on the cluster):
@@ -35,7 +35,7 @@ metadata:
   namespace: kube-system
 spec:
   chart: oci://ghcr.io/<owner>/charts/dspark-vllm
-  version: 0.1.0
+  version: <version>   # see RELEASING.md
   targetNamespace: vllm
   createNamespace: true
   valuesContent: |-

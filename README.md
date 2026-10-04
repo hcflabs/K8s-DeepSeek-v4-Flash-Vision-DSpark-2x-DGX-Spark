@@ -11,6 +11,7 @@ see [`CREDITS.md`](CREDITS.md) and [`SYNC.md`](SYNC.md).
 chart/      Helm chart (two Deployments + beacon, hotfix ConfigMaps, Service, optional Ingress)
 ansible/    agent-only k3s join, GPU runtime check, fabric netplan + verify, labels/taint
 scripts/    prepare-model, apply (device plugin + chart), verify, smoke, check-anchors
+cliff.toml  changelog + chart-version rules; releases run in Actions (RELEASING.md)
 ```
 
 ## Prerequisites
@@ -77,6 +78,13 @@ opt-ins, never defaults. If you deploy either: enable `auth.*`, do not publish
 the Ingress to the internet, and take responsibility for who can reach the
 model and how it is used. The ablation lane additionally requires accepting
 the gated repo's responsible-use terms.
+
+## Releases
+
+The chart version, changelog, tag, OCI push and GitHub Release are all produced
+by the `release` workflow; no release step is done by hand. Run it from the
+Actions tab or `gh workflow run release.yml -f bump=auto`. See
+[`RELEASING.md`](RELEASING.md).
 
 ## Operations
 
