@@ -126,7 +126,14 @@ gated DSPARK_ENABLE_CODEX_AGENT_MESSAGE_COMPAT codex-agent-message \
   python3 "${HF}/hotfix-vllm-codex-agent-message.py"
 
 # ── 12. Vision-Exp native image support (always) ──
-run vision-exp python3 "${HF}/hotfix-dsv4-vision-exp.py"
+# Its encoder anchor lives in the model's encoding file, which step 1 copies in.
+# Check mode without a checkpoint still has the image's placeholder there, so
+# report a skip instead of a false FAIL. In a real pod the encoder always exists.
+if [ "${CHECK_ALL}" = "1" ] && [ ! -f "${ENC_SRC}" ]; then
+  skip vision-exp "check mode without the model encoder"
+else
+  run vision-exp python3 "${HF}/hotfix-dsv4-vision-exp.py"
+fi
 
 # ── 13. Issue #141 sparse MLA decode chunk (gated) ──
 gated DSPARK_ENABLE_ISSUE141_SPARSE_MLA_CHUNK issue141-sparse-mla-chunk \

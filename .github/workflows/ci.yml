@@ -30,6 +30,9 @@ jobs:
   anchors:
     # Dry-runs every hotfix against the pinned image. Slow (arm64 under QEMU,
     # ~9 GiB image) but it is the only check that catches a moved anchor.
+    # check-anchors.sh also fetches the checkpoint's ~36 KB encoder from
+    # Hugging Face (pinned revision) so the #21 and vision-exp anchors, which
+    # live in that file, are validated too.
     runs-on: ubuntu-latest
     steps:
       - name: Free disk space for the image

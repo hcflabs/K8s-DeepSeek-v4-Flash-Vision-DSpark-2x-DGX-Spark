@@ -6,6 +6,11 @@
 #   scripts/check-anchors.sh --image REF     also dry-run all 34 steps inside REF (docker)
 #   scripts/check-anchors.sh --log FILE      summarize the output of a previous run
 #
+# The image run fetches the checkpoint's small encoder file (~36 KB, pinned) so
+# the #21 and vision-exp anchors are validated too: both live in the model's
+# encoding file, which serve.sh copies over the image's placeholder. Pass
+# --no-encoder to skip that fetch and accept a partial check (offline runs).
+#
 # The image run executes serve.sh with every gate enabled (DSPARK_CHECK_ALL=1)
 # and stops before `vllm serve` (DSPARK_APPLY_ONLY=1). Each step is reported as
 # applied / skip / FAIL; a missing anchor exits non-zero. The container
@@ -14,12 +19,16 @@
 # Env: DOCKER_PLATFORM (default linux/arm64; the image is arm64-only)
 #      DOCKER_ROOT      (default /var/lib/docker) where free space is measured
 #      MIN_FREE_GIB     (default 20) required free space under DOCKER_ROOT
+#      MODEL_REPO       (default deepseek-ai/DeepSeek-V4-Flash-Vision-Exp)
+#      MODEL_REVISION   pinned revision of the encoder file
+#      ENCODER_PATH     path within the model repo (default encoding/encoding_dsv4.py)
 set -euo pipefail
 
 CHART="$(cd "$(dirname "${BASH_SOURCE[0]}")/../chart" && pwd)"
 FILES="${CHART}/files"
 IMAGE=""
 LOG=""
+NO_ENCODER=0
 
 usage() { sed -n '2,13p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'; }
 
@@ -27,6 +36,7 @@ while [[ $# -gt 0 ]]; do
   case "$1" in
     --image) IMAGE="${2:?--image needs a value}"; shift 2 ;;
     --log) LOG="${2:?--log needs a file}"; shift 2 ;;
+    --no-encoder) NO_ENCODER=1; shift ;;
     -h | --help) usage; exit 0 ;;
     *) echo "unknown argument: $1" >&2; usage >&2; exit 2 ;;
   esac
@@ -34,6 +44,9 @@ done
 
 summarize() {
   local log="$1" applied skipped failed
+  if [[ "${NO_ENCODER}" -eq 1 ]]; then
+    echo "note: --no-encoder: the #21 and vision-exp anchors were not validated"
+  fi
   applied="$(grep -c '^\[hotfix\] applied' "${log}" || true)"
   skipped="$(grep -c '^\[hotfix\] skip' "${log}" || true)"
   failed="$(grep -c '^\[hotfix\] FAIL' "${log}" || true)"
@@ -91,6 +104,30 @@ if [[ "${avail_kb}" =~ ^[0-9]+$ ]]; then
   fi
 fi
 
+# The two encoder-dependent anchors (#21, vision-exp) can only be checked with
+# the checkpoint's encoder present: the image ships a placeholder at that path.
+# The file is ~36 KB, so fetch it at the pinned revision instead of the 157 GiB
+# checkpoint.
+MODEL_REPO="${MODEL_REPO:-deepseek-ai/DeepSeek-V4-Flash-Vision-Exp}"
+MODEL_REVISION="${MODEL_REVISION:-86f746b36186f0e567729a5c06a8c918caba82a9}"
+ENCODER_PATH="${ENCODER_PATH:-encoding/encoding_dsv4.py}"
+model_dir="${tmp}/model"
+mkdir -p "${model_dir}/$(dirname "${ENCODER_PATH}")"
+if [[ "${NO_ENCODER}" -eq 1 ]]; then
+  echo "anchor check: --no-encoder: skipping the encoder fetch (partial check)" >&2
+else
+  encoder_url="https://huggingface.co/${MODEL_REPO}/resolve/${MODEL_REVISION}/${ENCODER_PATH}"
+  if curl -sSfL "${encoder_url}" -o "${model_dir}/${ENCODER_PATH}"; then
+    echo "anchor check: fetched the encoder at ${MODEL_REVISION:0:12} ($(wc -c <"${model_dir}/${ENCODER_PATH}") bytes)"
+  else
+    echo "ERROR: could not fetch the checkpoint's encoder:" >&2
+    echo "       ${encoder_url}" >&2
+    echo "       The #21 and vision-exp anchors cannot be validated without it." >&2
+    echo "       Re-run with --no-encoder to accept a check that skips them." >&2
+    exit 1
+  fi
+fi
+
 echo "anchor check: pulling ${IMAGE} (${PLATFORM})"
 set +e
 docker pull --platform "${PLATFORM}" "${IMAGE}" 2>&1 | tee "${tmp}/pull.log"
@@ -106,7 +143,8 @@ log="${tmp}/anchors.log"
 set +e
 docker run --rm --platform "${PLATFORM}" --entrypoint bash \
   -e DSPARK_CHECK_ALL=1 -e DSPARK_APPLY_ONLY=1 \
-  -e DSPARK_MODEL_DIR=/nonexistent -e VLLM_NODE_RANK=0 \
+  -e DSPARK_MODEL_DIR=/models/model -e VLLM_NODE_RANK=0 \
+  -v "${model_dir}:/models/model:ro" \
   -v "${FILES}/serve.sh:/etc/vllm/serve.sh:ro" \
   -v "${FILES}/hotfixes:/etc/vllm-hotfixes:ro" \
   -v "${FILES}/hotfixes/vision_exp:/opt/dspark-patches/vision_exp:ro" \
