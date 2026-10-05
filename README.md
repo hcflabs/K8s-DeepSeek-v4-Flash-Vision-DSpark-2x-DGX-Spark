@@ -1,5 +1,10 @@
 # DeepSeek-V4-Flash-Vision on two DGX Sparks - Kubernetes/k3s
 
+[![ci](https://github.com/hcflabs/K8s-DeepSeek-v4-Flash-Vision-DSpark-2x-DGX-Spark/actions/workflows/ci.yml/badge.svg)](https://github.com/hcflabs/K8s-DeepSeek-v4-Flash-Vision-DSpark-2x-DGX-Spark/actions/workflows/ci.yml)
+[![release](https://img.shields.io/github/v/release/hcflabs/K8s-DeepSeek-v4-Flash-Vision-DSpark-2x-DGX-Spark)](https://github.com/hcflabs/K8s-DeepSeek-v4-Flash-Vision-DSpark-2x-DGX-Spark/releases)
+[![chart](https://img.shields.io/badge/dynamic/yaml?url=https%3A%2F%2Fraw.githubusercontent.com%2Fhcflabs/K8s-DeepSeek-v4-Flash-Vision-DSpark-2x-DGX-Spark%2Fmain%2Fchart%2FChart.yaml&query=%24.version&label=chart&color=0F1689)](chart/Chart.yaml)
+[![license](https://img.shields.io/github/license/hcflabs/K8s-DeepSeek-v4-Flash-Vision-DSpark-2x-DGX-Spark)](LICENSE)
+
 A Helm chart plus an Ansible layer that serve
 `deepseek-ai/DeepSeek-V4-Flash-Vision-Exp` tensor-parallel (TP=2, 1M-token
 context, `nvfp4_ds_mla` KV, native vision) across two NVIDIA DGX Spark (GB10,
@@ -12,6 +17,7 @@ chart/      Helm chart (two Deployments + beacon, hotfix ConfigMaps, Service, op
 ansible/    agent-only k3s join, GPU runtime check, fabric netplan + verify, labels/taint
 scripts/    prepare-model, apply (device plugin + chart), verify, smoke, check-anchors
 cliff.toml  changelog + chart-version rules; releases run in Actions (RELEASING.md)
+.github/    CI, the release workflow, issue/PR templates, dependabot
 ```
 
 ## Prerequisites

@@ -1,0 +1,11 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Security vulnerability
+    url: https://github.com/hcflabs/K8s-DeepSeek-v4-Flash-Vision-DSpark-2x-DGX-Spark/security/advisories/new
+    about: Report privately. Please do not open a public issue for anything exploitable.
+  - name: Upstream recipe, serving image or hotfix
+    url: https://github.com/MiaAI-Lab/DeepSeek-v4-Flash-DSpark-2x-DGX-Spark/issues
+    about: The Compose recipe, the dspark-vllm-gx10 image and the hotfixes originate upstream.
+  - name: How do I deploy this?
+    url: https://github.com/hcflabs/K8s-DeepSeek-v4-Flash-Vision-DSpark-2x-DGX-Spark/blob/main/README.md
+    about: The README quick start covers provision, weights, apply and verify; ENVS.md maps every value.
