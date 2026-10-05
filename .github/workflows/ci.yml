@@ -14,16 +14,22 @@ jobs:
         run: helm lint chart -f chart/ci/test-values.yaml
       - name: helm template (defaults, ingress, auth variants)
         run: |
-          V="-f chart/ci/test-values.yaml"
-          helm template ci chart $V > /dev/null
-          helm template ci chart $V --set 'ingress.hosts[0]=vllm.example.com' > /dev/null
-          helm template ci chart $V --set auth.apiKey=test > /dev/null
-          helm template ci chart $V --set weights.nfs.enabled=true --set weights.nfs.server=192.0.2.1 --set weights.nfs.path=/m > /dev/null
+          V=(-f chart/ci/test-values.yaml)
+          helm template ci chart "${V[@]}" > /dev/null
+          helm template ci chart "${V[@]}" --set 'ingress.hosts[0]=vllm.example.com' > /dev/null
+          helm template ci chart "${V[@]}" --set auth.apiKey=test > /dev/null
+          helm template ci chart "${V[@]}" --set weights.nfs.enabled=true --set weights.nfs.server=192.0.2.1 --set weights.nfs.path=/m > /dev/null
           if helm template ci chart > /dev/null 2>&1; then echo "chart must require site values"; exit 1; fi
       - name: shellcheck
         run: |
           sudo apt-get update -qq && sudo apt-get install -y -qq shellcheck
           shellcheck -S warning chart/files/serve.sh chart/files/wait-for-worker.sh scripts/*.sh
+      - name: actionlint (workflows, plus shellcheck on run blocks)
+        run: |
+          set -euo pipefail
+          version=1.7.12
+          curl -sSfL "https://github.com/rhysd/actionlint/releases/download/v${version}/actionlint_${version}_linux_amd64.tar.gz" | tar xz -C /tmp actionlint
+          /tmp/actionlint -color .github/workflows/*.yml
       - name: embedded script syntax
         run: scripts/check-anchors.sh
 

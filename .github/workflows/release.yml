@@ -32,6 +32,9 @@ env:
   CHART_DIR: chart
   CHART_NAME: dspark-vllm
   CHANGELOG: chart/CHANGELOG.md
+  # Repository-root copy, kept identical so visitors find a changelog where
+  # they expect one while the chart still ships its own for Artifact Hub.
+  CHANGELOG_ROOT: CHANGELOG.md
 
 jobs:
   release:
@@ -139,9 +142,11 @@ jobs:
             git-cliff --config cliff.toml --unreleased --bump="${BUMP}" --prepend "${CHANGELOG}"
           fi
 
+          cp "${CHANGELOG}" "${CHANGELOG_ROOT}"
+
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add "${CHART_DIR}/Chart.yaml" "${CHANGELOG}"
+          git add "${CHART_DIR}/Chart.yaml" "${CHANGELOG}" "${CHANGELOG_ROOT}"
           git diff --cached --quiet || git commit -m "chore(release): v${VERSION}"
 
           # Annotated, and pushed explicitly: `git push --follow-tags` only

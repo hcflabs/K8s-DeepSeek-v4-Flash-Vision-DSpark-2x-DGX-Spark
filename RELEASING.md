@@ -25,7 +25,8 @@ One job then does all of it:
    input;
 2. refuses to continue if that version does not advance `chart/Chart.yaml`;
 3. writes the version into `chart/Chart.yaml` (leaving `appVersion` alone);
-4. prepends the new section to `chart/CHANGELOG.md`;
+4. prepends the new section to `chart/CHANGELOG.md` and mirrors it to the
+   repository-root `CHANGELOG.md`;
 5. commits `chore(release): vX.Y.Z` and pushes the annotated tag `vX.Y.Z`;
 6. lints, packages from `Chart.yaml`, and pushes the chart to
    `oci://ghcr.io/<owner>/charts`;
@@ -68,7 +69,9 @@ for a chart change that was committed as `docs:`/`chore:`.
 ## Configuration
 
 - `cliff.toml` — commit grouping, the changelog template, and the bump rules.
-- `chart/CHANGELOG.md` — generated. Its header must stay identical to
+- `chart/CHANGELOG.md` — generated, and copied verbatim to the root
+  `CHANGELOG.md` (the chart keeps its own copy so it ships with the package and
+  renders on Artifact Hub). Its header must stay identical to
   `[changelog] header` in `cliff.toml`: `--prepend` strips the header it knows
   about and rewrites it above the new section, so changing one means changing
   both. (git-cliff falls back to its own template when the config is missing,
