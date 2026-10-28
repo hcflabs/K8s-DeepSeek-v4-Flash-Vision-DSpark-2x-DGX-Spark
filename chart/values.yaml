@@ -38,6 +38,12 @@ topology:
     interface: ""      # NCCL_SOCKET_IFNAME: netdev carrying the fabric (see `ip -br link`)
     rdmaDevice: ""     # NCCL_IB_HCA: RDMA device of that port (see /sys/class/infiniband);
                        # a wrong value silently falls back to TCP
+    gidIndex: 2        # NCCL_IB_GID_INDEX: pin the RoCEv2 IPv4 GID slot. NCCL auto-probe
+                       # can select an empty slot after a driver/interface reset on the
+                       # peer node (ibv_modify_qp errno 61 "No data available", local
+                       # GID ::), crashing ncclCommInitRank. Verify with:
+                       #   cat /sys/class/infiniband/<rdmaDevice>/ports/1/gids/2
+                       # Set to "" to restore NCCL auto-probe.
     port: 25000                   # torch.distributed master port
     beaconPort: 25099
 

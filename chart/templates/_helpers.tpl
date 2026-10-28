@@ -76,6 +76,9 @@ app.kubernetes.io/component: {{ .component }}
 - {name: DSPARK_SPEC_DRAFT_SAMPLE, value: {{ $v.serving.speculative.draftSampleMethod | quote }}}
 - {name: DSPARK_EXTRA_ARGS, value: {{ $v.serving.extraArgs | quote }}}
 - {name: NCCL_IB_HCA, value: {{ required "topology.fabric.rdmaDevice is required" $v.topology.fabric.rdmaDevice | quote }}}
+{{- if $v.topology.fabric.gidIndex }}
+- {name: NCCL_IB_GID_INDEX, value: {{ $v.topology.fabric.gidIndex | quote }}}
+{{- end }}
 - {name: NCCL_SOCKET_IFNAME, value: {{ required "topology.fabric.interface is required" $v.topology.fabric.interface | quote }}}
 - {name: NCCL_DEBUG, value: {{ $v.serving.ncclDebug | quote }}}
 - {name: NCCL_DEBUG_SUBSYS, value: "INIT,NET"}
